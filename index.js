@@ -414,7 +414,7 @@ app.post('/click_funnels', async (req, res) => {
     const lastName = purchase.contact.last_name
     const email = purchase.contact.email
     const member_opt_in = purchase.contact.member_opt_in
-
+    console.log("PAYLOAD", req.body.purchase);
     if (member_opt_in === "true") {
         try {
             let userId = await getUserVID(email)
