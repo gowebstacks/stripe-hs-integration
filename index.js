@@ -406,6 +406,12 @@ app.post('/expiring_card', async (req, res) => {
 
 app.post('/click_funnels/funnel_webhooks/test', async (req, res) => {
     // for the purpose of creating webhook - test for click funnels verification
+    console.log("FROM HERE _ 1.0");
+    res.status(200).send()
+})
+app.post('/funnel_webhooks/test', async (req, res) => {
+    // for the purpose of creating webhook - test for click funnels verification
+    console.log("FROM HERE _ 2.0");
     res.status(200).send()
 })
 app.post('/click_funnels', async (req, res) => {
