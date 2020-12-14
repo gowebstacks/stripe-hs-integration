@@ -9,8 +9,8 @@ app.use(bodyParser.json())
 
 const PORT = process.env.PORT || 3000
 
-// const stripe = require('stripe')(process.env.STRIPE_PROD_SK);
-const stripe = require('stripe')(process.env.STRIPE_TEST_SK); // FOR DEV
+const stripe = require('stripe')(process.env.STRIPE_PROD_SK);
+// const stripe = require('stripe')(process.env.STRIPE_TEST_SK); // FOR DEV
 
 app.get("/", (req, res) => {
     res.send(JSON.stringify({ "Hello": "World" }))
