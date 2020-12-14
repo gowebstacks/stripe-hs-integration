@@ -211,7 +211,33 @@ const createAssociation = async (dealId, lineItemId) => {
         console.log("ERROR: COULD NOT CREATE ASSOCIATION");
     }
 }
+const deleteAssociation = async (dealId, lineItemId) => {
+    //  DELETE HUBSPOT ASSOCIATION FROM LINE ITEM TO DEAL
+    try {
+        const associationRequest = {
+            "fromObjectId": dealId,
+            "toObjectId": lineItemId,
+            "category": "HUBSPOT_DEFINED",
+            "definitionId": 19
+        }
+        const res = await axios.put(`https://api.hubapi.com/crm-associations/v1/associations/delete?hapikey=${process.env.HAPI_KEY}`, associationRequest)
+        // console.log(`SUCCESFULLY DELETED ASSOCIATION BETWEEN DEAL ${dealId} AND LINE ITEM ${lineItemId}`);
 
+    } catch (e) {
+        console.log("ERROR: COULD NOT DELETE ASSOCIATION");
+    }
+}
+
+const getAssociation = async (dealId) => {
+    try {
+        const res = await axios.get(`https://api.hubapi.com/crm-associations/v1/associations/${dealId}/HUBSPOT_DEFINED/19?hapikey=${process.env.HAPI_KEY}`)
+        return res.data.results
+    } catch (e) {
+        console.log("ERROR", e);
+    }
+}
+// deleteAssociation('3613802335', '1027475319')
+// getAssociation('3613802335')
 const updateDeal = async (dealId, property, value) => {
     try {
         const body = {
@@ -225,6 +251,24 @@ const updateDeal = async (dealId, property, value) => {
         console.log("ERROR:", e);
     }
 }
+
+// const props = [{name: "Name", value: "Rob"}, {name: "Age", value: "28"}, {name: "Height", value: "6'2"}]
+const newUpdateDeal = async (dealId, properties) => {
+
+    try {
+        const body = {
+            properties: {
+            }
+        }
+        properties.forEach((property) => {
+            body.properties = {...body.properties, [property.name]: property.value}
+        })
+        await axios.patch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}?hapikey=${process.env.HAPI_KEY}`, body, { accept: 'application/json', 'content-type': 'application/json' })
+    } catch (e) {
+        console.log("ERROR:", e);
+    }
+}
+// newUpdateDeal("22", props)
 
 const cancelDeal = async (dealId, date) => {
     try {
@@ -240,4 +284,4 @@ const cancelDeal = async (dealId, date) => {
     }
 }
 
-module.exports = { getUserVID, createUser, getContactDeals, getDealData, createDeal, cancelDeal, getHubspotProducts, createProduct, getLineItems, createLineItem, createAssociation, updateDeal, associateContactToDeal, createUserOptIn, updateContact }
+module.exports = { getUserVID, deleteAssociation, getAssociation, newUpdateDeal, createUser, getContactDeals, getDealData, createDeal, cancelDeal, getHubspotProducts, createProduct, getLineItems, createLineItem, createAssociation, updateDeal, associateContactToDeal, createUserOptIn, updateContact }
