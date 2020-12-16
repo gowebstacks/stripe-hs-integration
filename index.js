@@ -60,8 +60,8 @@ app.post('/subscription_updated', async (req, res) => {
     const customerId = payload.customer
     const productPriceId = payload.items.data[0].price.id
     const status = payload.status
-    console.log("STATUS", status);
-    console.log("PREV STATUS", prevStatus);
+    console.log("PRODUCT PRICE ID", productPriceId);
+    console.log("PAYLOAD", payload);
     const priceObj = handlePrice(productPriceId)
 
     const customer = await stripe.customers.retrieve(customerId);
