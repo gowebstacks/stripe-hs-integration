@@ -60,25 +60,31 @@ app.post('/subscription_updated', async (req, res) => {
     const customerId = payload.customer
     const productPriceId = payload.items.data[0].price.id
     const status = payload.status
-    console.log("PRODUCT PRICE ID", productPriceId);
-    console.log("PAYLOAD", payload);
+    // console.log("PRODUCT PRICE ID", productPriceId);
+    // console.log("PAYLOAD", payload);
     const priceObj = handlePrice(productPriceId)
 
     const customer = await stripe.customers.retrieve(customerId);
     const email = customer.email
     const name = customer.name
 
+    console.log("EMAIL", email);
+    console.log("NAME", name);
     const userId = await getUserVID(email)
+    console.log("USER ID", userId);
 
     try {
         const deals = await getContactDeals(userId)
+        console.log("DEALS", deals);
         const dealsWithData = await Promise.all(deals.map(async (deal) => {
             return await getDealData(deal)
         }))
+        console.log("DEALS WITH DATA", dealsWithData);
 
         const match = dealsWithData.find((ele) => {
             return ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.name}`
         })
+        console.log("MATCH CRED", `${name} - ${priceObj.name}`);
         console.log("MATCH", match);
 
         if (match) {
