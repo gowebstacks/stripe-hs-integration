@@ -65,21 +65,17 @@ app.post('/subscription_updated', async (req, res) => {
     const priceObj = handlePrice(productPriceId)
 
     const customer = await stripe.customers.retrieve(customerId);
+    console.log("STRIPE CUSTOMER", customer);
     const email = customer.email
     const name = customer.name
 
-    console.log("EMAIL", email);
-    console.log("NAME", name);
     const userId = await getUserVID(email)
-    console.log("USER ID", userId);
 
     try {
         const deals = await getContactDeals(userId)
-        console.log("DEALS", deals);
         const dealsWithData = await Promise.all(deals.map(async (deal) => {
             return await getDealData(deal)
         }))
-        console.log("DEALS WITH DATA", dealsWithData);
 
         const match = dealsWithData.find((ele) => {
             return ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.name}`

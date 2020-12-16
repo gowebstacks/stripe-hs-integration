@@ -261,7 +261,7 @@ const newUpdateDeal = async (dealId, properties) => {
             }
         }
         properties.forEach((property) => {
-            body.properties = {...body.properties, [property.name]: property.value}
+            body.properties = { ...body.properties, [property.name]: property.value }
         })
         await axios.patch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}?hapikey=${process.env.HAPI_KEY}`, body, { accept: 'application/json', 'content-type': 'application/json' })
     } catch (e) {
@@ -285,3 +285,13 @@ const cancelDeal = async (dealId, date) => {
 }
 
 module.exports = { getUserVID, deleteAssociation, getAssociation, newUpdateDeal, createUser, getContactDeals, getDealData, createDeal, cancelDeal, getHubspotProducts, createProduct, getLineItems, createLineItem, createAssociation, updateDeal, associateContactToDeal, createUserOptIn, updateContact }
+
+
+// const decipher = () => {
+//     const str = 'Andy Mcc - Authorify Digital Membership $97'
+
+//     const prod = str.split(" - ")[1]
+//     console.log(prod);
+// }
+
+// decipher()
