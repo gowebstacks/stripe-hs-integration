@@ -23,7 +23,7 @@ app.post('/cancel_subscription', async (req, res) => {
     const priceObj = handlePrice(productPriceId)
     const customer = await stripe.customers.retrieve(customerId);
     const email = customer.email
-    const name = customer.name
+    const name = customer.name || customer.metadata.name
 
     let date = new Date()
     date = date.setUTCHours(0, 0, 0, 0)
@@ -65,37 +65,37 @@ app.post('/subscription_updated', async (req, res) => {
     const priceObj = handlePrice(productPriceId)
 
     const customer = await stripe.customers.retrieve(customerId);
-    console.log("STRIPE CUSTOMER", customer);
+
     const email = customer.email
-    const name = customer.name
+    const name = customer.name || customer.metadata.name
 
     const userId = await getUserVID(email)
 
-    try {
-        const deals = await getContactDeals(userId)
-        const dealsWithData = await Promise.all(deals.map(async (deal) => {
-            return await getDealData(deal)
-        }))
+    if (prevStatus !== status) {
+        try {
+            const deals = await getContactDeals(userId)
+            const dealsWithData = await Promise.all(deals.map(async (deal) => {
+                return await getDealData(deal)
+            }))
 
-        const match = dealsWithData.find((ele) => {
-            return ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.name}`
-        })
-        console.log("MATCH CRED", `${name} - ${priceObj.name}`);
-        console.log("MATCH", match);
+            const match = dealsWithData.find((ele) => {
+                return ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.name}`
+            })
 
-        if (match) {
-            if (status === "trialing") {
-                updateDeal(match.id, "status", "Trialing")
-            } else if (status === "active") {
-                updateDeal(match.id, "status", "Active")
-            } else if (status === "canceled") {
-                updateDeal(match.id, "status", "Cancelled")
-            } else if (status === "past_due" || status === "unpaid" || status === "incomplete") {
-                updateDeal(match.id, "status", "Failed")
+            if (match) {
+                if (status === "trialing") {
+                    updateDeal(match.id, "status", "Trialing")
+                } else if (status === "active") {
+                    updateDeal(match.id, "status", "Active")
+                } else if (status === "canceled") {
+                    updateDeal(match.id, "status", "Cancelled")
+                } else if (status === "past_due" || status === "unpaid" || status === "incomplete") {
+                    updateDeal(match.id, "status", "Failed")
+                }
             }
+        } catch (e) {
+            console.log("ERROR: COULD NOT UPDATE DEAL");
         }
-    } catch (e) {
-        console.log("ERROR: COULD NOT UPDATE DEAL");
     }
 
     res.status(200).send()
@@ -470,7 +470,7 @@ app.post('/successful_payment', async (req, res) => {
     const customer = await stripe.customers.retrieve(customerId);
 
     const email = customer.email
-    const name = customer.name
+    const name = customer.name || customer.metadata.name
 
     const invoiceData = await stripe.invoices.retrieve(invoice);
 
@@ -512,7 +512,7 @@ app.post('/failed_payment', async (req, res) => {
     const customer = await stripe.customers.retrieve(customerId);
 
     const email = customer.email
-    const name = customer.name
+    const name = customer.name || customer.metadata.name
     const invoice = payload.invoice
 
     const invoiceData = await stripe.invoices.retrieve(invoice);
