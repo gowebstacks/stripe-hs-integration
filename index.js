@@ -70,33 +70,32 @@ app.post('/subscription_updated', async (req, res) => {
 
     const userId = await getUserVID(email)
 
-    if (prevStatus && prevStatus !== status) {
-        try {
-            const deals = await getContactDeals(userId)
-            const dealsWithData = await Promise.all(deals.map(async (deal) => {
-                return await getDealData(deal)
-            }))
+    try {
+        const deals = await getContactDeals(userId)
+        const dealsWithData = await Promise.all(deals.map(async (deal) => {
+            return await getDealData(deal)
+        }))
 
-            const match = dealsWithData.find((ele) => {
-                return ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.name}`
-            })
+        const match = dealsWithData.find((ele) => {
+            return ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.name}`
+        })
+        console.log("MATCH", match);
 
-            if (match) {
-                if (status === "trialing") {
-                    updateDeal(match.id, "status", "Trialing")
-                } else if (status === "active") {
-                    updateDeal(match.id, "status", "Active")
-                } else if (status === "canceled") {
-                    updateDeal(match.id, "status", "Cancelled")
-                } else if (status === "past_due" || status === "unpaid" || status === "incomplete") {
-                    updateDeal(match.id, "status", "Failed")
-                }
+        if (match) {
+            if (status === "trialing") {
+                updateDeal(match.id, "status", "Trialing")
+            } else if (status === "active") {
+                updateDeal(match.id, "status", "Active")
+            } else if (status === "canceled") {
+                updateDeal(match.id, "status", "Cancelled")
+            } else if (status === "past_due" || status === "unpaid" || status === "incomplete") {
+                updateDeal(match.id, "status", "Failed")
             }
-        } catch (e) {
-            console.log("ERROR: COULD NOT UPDATE DEAL");
         }
-
+    } catch (e) {
+        console.log("ERROR: COULD NOT UPDATE DEAL");
     }
+
     res.status(200).send()
 })
 
@@ -112,7 +111,9 @@ app.post('/create_subscription', async (req, res) => {
     const email = customer.email
     let name = customer.metadata.name || customer.name || customer.shipping.name
     let newStatus;
-    if (status === "active") {
+    if (status === "trialing") {
+        newStatus = "Trialing"
+    } else if (status === "active") {
         newStatus = "Active"
     } else if (status === "canceled") {
         newStatus = "Cancelled"
