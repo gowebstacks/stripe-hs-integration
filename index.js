@@ -467,6 +467,8 @@ app.post('/successful_payment', async (req, res) => {
     const customerId = payload.customer
     const invoice = payload.invoice
 
+    console.log("Payload", payload);
+
     const customer = await stripe.customers.retrieve(customerId);
 
     const email = customer.email
