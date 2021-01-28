@@ -3,13 +3,13 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 require('dotenv').config()
 const { handleProd, handlePrice } = require('./utils/products')
-const { getUserVID, newUpdateDeal, deleteAssociation, getAssociation, createUser, getContactDeals, getDealData, createDeal, getHubspotProducts, createProduct, getLineItems, createLineItem, createAssociation, updateDeal, associateContactToDeal, cancelDeal, createUserOptIn, updateContact } = require('./utils/hubspot')
+const { getUserVID, deleteAssociation, getAssociation, createUser, getContactDeals, getDealData, createDeal, getHubspotProducts, createProduct, handleStatus, createLineItem, createAssociation, updateDeal, associateContactToDeal, cancelDeal, createUserOptIn, updateContact } = require('./utils/hubspot')
 const app = express()
 app.use(bodyParser.json())
 
 const PORT = process.env.PORT || 3000
 
-const stripe = require('stripe')(process.env.STRIPE_PROD_SK);
+const stripe = require('stripe')(process.env.STRIPE_PROD_SK);  // FOR PROD
 // const stripe = require('stripe')(process.env.STRIPE_TEST_SK); // FOR DEV
 
 app.get("/", (req, res) => {
@@ -24,29 +24,26 @@ app.post('/cancel_subscription', async (req, res) => {
     const customer = await stripe.customers.retrieve(customerId);
     const email = customer.email
     const name = customer.name || customer.metadata.name
-
     let date = new Date()
     date = date.setUTCHours(0, 0, 0, 0)
-
     const userId = await getUserVID(email)
     if (userId) {
         try {
             const deals = await getContactDeals(userId)
-
-            const dealsWithData = await Promise.all(deals.map(async (deal) => {
+            let dealsWithData = await Promise.all(deals.map(async (deal) => {
                 return await getDealData(deal)
             }))
-
+            dealsWithData = dealsWithData.filter((deal) => {
+                return deal.properties.pipeline && deal.properties.pipeline === '6808662'
+            })
             const match = dealsWithData.find((ele) => {
                 return ele.properties && ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.name}`
             })
-
             if (match) {
                 cancelDeal(match.id, date)
             } else {
                 console.log("NO ASSOCIATED DEAL FOUND");
             }
-
         } catch (e) {
             console.log("ERROR: COULD NOT UPDATE DEAL");
         }
@@ -55,50 +52,72 @@ app.post('/cancel_subscription', async (req, res) => {
 })
 
 app.post('/subscription_updated', async (req, res) => {
-    const payload = req.body.data.object
-    const prevStatus = req.body.data.previous_attributes.status
-    const customerId = payload.customer
-    const productPriceId = payload.items.data[0].price.id
-    const status = payload.status
-    // console.log("PRODUCT PRICE ID", productPriceId);
-    // console.log("PAYLOAD", payload);
-    const priceObj = handlePrice(productPriceId)
+    try {
+        const payload = req.body.data.object
+        const prevStatus = req.body.data.previous_attributes.status
+        const customerId = payload.customer
+        const productPriceId = payload.items.data[0].price.id
+        const status = payload.status
+        const priceObj = handlePrice(productPriceId)
+        const product = payload.items.data[0].price.product || payload.plan.product
+        const prodInfo = handleProd(product)
 
-    const customer = await stripe.customers.retrieve(customerId);
+        const customer = await stripe.customers.retrieve(customerId);
+        const email = customer.email
+        const name = customer.name || customer.metadata.name
 
-    const email = customer.email
-    const name = customer.name || customer.metadata.name
-
-    const userId = await getUserVID(email)
-
-    if (prevStatus !== status) {
-        try {
+        const userId = await getUserVID(email)
+        if (userId) {
             const deals = await getContactDeals(userId)
-            const dealsWithData = await Promise.all(deals.map(async (deal) => {
-                return await getDealData(deal)
-            }))
-
-            const match = dealsWithData.find((ele) => {
-                return ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.name}`
-            })
-
-            if (match) {
-                if (status === "trialing") {
-                    updateDeal(match.id, "status", "Trialing")
-                } else if (status === "active") {
-                    updateDeal(match.id, "status", "Active")
-                } else if (status === "canceled") {
-                    updateDeal(match.id, "status", "Cancelled")
-                } else if (status === "past_due" || status === "unpaid" || status === "incomplete") {
-                    updateDeal(match.id, "status", "Failed")
+            if (deals && deals.length > 0) {
+                let dealsWithData = await Promise.all(deals.map(async (deal) => {
+                    return await getDealData(deal)
+                }))
+                dealsWithData = dealsWithData.filter((deal) => {
+                    return deal.properties.pipeline && deal.properties.pipeline === '6808662'
+                })
+                let match = null;
+                if (prodInfo.prod === "Authorify") {
+                    match = dealsWithData.find((ele) => {
+                        return ele.properties.authorify_product && ele.properties.authorify_product !== null
+                    })
+                } else if (prodInfo.prod === "RMA") {
+                    match = dealsWithData.find((ele) => {
+                        return ele.properties.referral_marketing_product && ele.properties.referral_marketing_product !== null
+                    })
+                } else if (prodInfo.prod === "DFY") {
+                    match = dealsWithData.find((ele) => {
+                        return ele.properties && ele.properties.dfy_product_name && ele.properties.dfy_product_name !== null
+                    })
+                }
+                if (match) {
+                    const body = {
+                        properties: {
+                            'dealname': `${name} - ${priceObj.name}`
+                        }
+                    }
+                    if (prevStatus !== status) {
+                        if (status === "trialing") {
+                            body.properties['status'] = "Trialing"
+                        } else if (status === "active") {
+                            body.properties['status'] = "Active"
+                        } else if (status === "canceled") {
+                            body.properties['status'] = "Cancelled"
+                        } else if (status === "past_due" || status === "unpaid" || status === "incomplete") {
+                            body.properties['status'] = "Failed"
+                        }
+                    }
+                    body.properties[priceObj.productProperty] = priceObj.product
+                    body.properties[priceObj.priceProperty] = priceObj.value
+                    updateDeal(match.id, body)
                 }
             }
-        } catch (e) {
-            console.log("ERROR: COULD NOT UPDATE DEAL");
         }
+        res.status(200).send()
+    } catch (e) {
+        console.log("ERROR: COULD NOT UPDATE DEAL");
+        res.status(400).send()
     }
-
-    res.status(200).send()
 })
 
 app.post('/create_subscription', async (req, res) => {
@@ -112,212 +131,120 @@ app.post('/create_subscription', async (req, res) => {
     const customer = await stripe.customers.retrieve(customerId);
     const email = customer.email
     let name = customer.metadata.name || customer.name || customer.shipping.name
-    let newStatus;
-    if (status === "trialing") {
-        newStatus = "Trialing"
-    } else if (status === "active") {
-        newStatus = "Active"
-    } else if (status === "canceled") {
-        newStatus = "Cancelled"
-    } else if (status === "past_due" || status === "unpaid" || status === "incomplete") {
-        newStatus = "Failed"
-    }
+    let newStatus = handleStatus(status)
+
     try {
         let userId = await getUserVID(email)
-
         if (!userId) {
             userId = await createUser(email, name)
         }
-        // get all deals associated with a contact
         const deals = await getContactDeals(userId)
         if (deals && deals.length > 0) {
-            const dealsWithData = await Promise.all(deals.map(async (deal) => {
+            let dealsWithData = await Promise.all(deals.map(async (deal) => {
                 return await getDealData(deal)
             }))
-
-            // MAKE SURE USER DOESN'T ALREADY HAVE A PRODUCT FOR THE SPECIFIC LEVEL
+            dealsWithData = dealsWithData.filter((deal) => {
+                return deal.properties.pipeline && deal.properties.pipeline === '6808662'
+            })
             if (prodInfo.prod === "Authorify") {
                 const match = dealsWithData.find((ele) => {
-                    return ele.properties.authorify_product !== null
+                    return ele.properties.authorify_product && ele.properties.authorify_product !== null
                 })
                 if (match) {
                     if (status === "trialing") {
                         return
                     } else {
-                        const updates = [
-                            { name: priceObj.productProperty, value: priceObj.product },
-                            { name: priceObj.priceProperty, value: priceObj.value },
-                            { name: "dealname", value: `${name} - ${priceObj.name}` },
-                            { name: "status", value: newStatus }
-                        ]
-                        await newUpdateDeal(match.id, updates)
-
-                        // get and delete deal's associated line items
+                        const body = {
+                            properties: {
+                                "dealname": `${name} - ${priceObj.name}`,
+                                "status": newStatus
+                            }
+                        }
+                        body.properties[priceObj.productProperty] = priceObj.product
+                        body.properties[priceObj.priceProperty] = priceObj.value
+                        await updateDeal(match.id, body)
                         const associations = await getAssociation(match.id)
                         await Promise.all(associations.map(async (association) => {
                             await deleteAssociation(match.id, association)
                         }))
-
-                        // get all hubspot products
-                        const hubspotProducts = await getHubspotProducts()
-                        // find the product to associate with the deal
+                        const hubspotProducts = await getHubspotProducts([])
                         const productMatch = hubspotProducts.find((item) => {
                             return item.properties.name && item.properties.name.value === priceObj.name
                         })
-
                         if (productMatch) {
-                            // get line items
-                            const lineItems = await getLineItems()
-
-                            // see if line item already exists to associate product to deal
-                            let lineItemMatch = lineItems.find((ele) => {
-                                return ele.properties.name && ele.properties.name.value === priceObj.name
-                            })
-                            if (!lineItemMatch) {
-                                // if it doesn't exist, create a line item for the product
-                                const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
-
-                                // associate the line item with the deal
-                                await createAssociation(match.id, lineItemId)
-                            } else if (lineItemMatch) {
-                                // if it does exit, associate the line item with the deal
-                                await createAssociation(match.id, lineItemMatch.objectId)
-                            }
+                            const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                            await createAssociation(match.id, lineItemId)
                         } else {
                             const productId = await createProduct(priceObj)
-
                             const lineItemId = await createLineItem(priceObj.name, productId)
-
                             await createAssociation(match.id, lineItemId)
                         }
                     }
                     return
                 } else {
                     const dealId = await createDeal(priceObj, name, status)
-                    // associate user to deal
                     await associateContactToDeal(dealId, userId)
-                    // get all hubspot products
-                    const hubspotProducts = await getHubspotProducts()
-                    // find the product to associate with the deal
+                    const hubspotProducts = await getHubspotProducts([])
                     const productMatch = hubspotProducts.find((item) => {
                         return item.properties.name && item.properties.name.value === priceObj.name
                     })
                     if (productMatch) {
-                        // get line items
-                        const lineItems = await getLineItems()
-
-                        // see if line item already exists to associate product to deal
-                        let lineItemMatch = lineItems.find((ele) => {
-                            return ele.properties && ele.properties.name && ele.properties.name.value === priceObj.name
-                        })
-                        if (!lineItemMatch) {
-                            // if it doesn't exist, create a line item for the product
-                            const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
-
-                            // associate the line item with the deal
-                            await createAssociation(dealId, lineItemId)
-                        } else if (lineItemMatch) {
-                            // if it does exit, associate the line item with the deal
-                            await createAssociation(dealId, lineItemMatch.objectId)
-                        }
+                        const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                        await createAssociation(dealId, lineItemId)
                     } else {
                         const productId = await createProduct(priceObj)
-
                         const lineItemId = await createLineItem(priceObj.name, productId)
-
                         await createAssociation(dealId, lineItemId)
                     }
                 }
             } else if (prodInfo.prod === "RMA") {
                 const match = dealsWithData.find((ele) => {
-                    return ele.properties && ele.properties.referral_marketing_product && ele.properties.referral_marketing_product !== null
+                    return ele.properties.referral_marketing_product && ele.properties.referral_marketing_product !== null
                 })
                 if (match) {
                     if (status === "trialing") {
                         return
                     } else {
-                        const updates = [
-                            { name: priceObj.productProperty, value: priceObj.product },
-                            { name: priceObj.priceProperty, value: priceObj.value },
-                            { name: "dealname", value: `${name} - ${priceObj.name}` },
-                            { name: "status", value: newStatus }
-                        ]
-                        await newUpdateDeal(match.id, updates)
-
-                        // get and delete deal's associated line items
+                        const body = {
+                            properties: {
+                                "dealname": `${name} - ${priceObj.name}`,
+                                "status": newStatus
+                            }
+                        }
+                        body.properties[priceObj.productProperty] = priceObj.product
+                        body.properties[priceObj.priceProperty] = priceObj.value
+                        await updateDeal(match.id, body)
                         const associations = await getAssociation(match.id)
                         await Promise.all(associations.map(async (association) => {
                             await deleteAssociation(match.id, association)
                         }))
-
-                        // get all hubspot products
-                        const hubspotProducts = await getHubspotProducts()
-                        // find the product to associate with the deal
+                        const hubspotProducts = await getHubspotProducts([])
                         const productMatch = hubspotProducts.find((item) => {
                             return item.properties.name && item.properties.name.value === priceObj.name
                         })
-
                         if (productMatch) {
-                            // get line items
-                            const lineItems = await getLineItems()
-
-                            // see if line item already exists to associate product to deal
-                            let lineItemMatch = lineItems.find((ele) => {
-                                return ele.properties.name && ele.properties.name.value === priceObj.name
-                            })
-                            if (!lineItemMatch) {
-                                // if it doesn't exist, create a line item for the product
-                                const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
-
-                                // associate the line item with the deal
-                                await createAssociation(match.id, lineItemId)
-                            } else if (lineItemMatch) {
-                                // if it does exit, associate the line item with the deal
-                                await createAssociation(match.id, lineItemMatch.objectId)
-                            }
+                            const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                            await createAssociation(match.id, lineItemId)
                         } else {
                             const productId = await createProduct(priceObj)
-
                             const lineItemId = await createLineItem(priceObj.name, productId)
-
                             await createAssociation(match.id, lineItemId)
                         }
                     }
                     return
                 } else {
                     const dealId = await createDeal(priceObj, name, status)
-                    // associate user to deal
                     await associateContactToDeal(dealId, userId)
-                    // get all hubspot products
-                    const hubspotProducts = await getHubspotProducts()
-                    // find the product to associate with the deal
+                    const hubspotProducts = await getHubspotProducts([])
                     const productMatch = hubspotProducts.find((item) => {
-                        return item.properties && item.properties.name && item.properties.name.value === priceObj.name
+                        return item.properties.name && item.properties.name.value === priceObj.name
                     })
-
                     if (productMatch) {
-                        // get line items
-                        const lineItems = await getLineItems()
-
-                        // see if line item already exists to associate product to deal
-                        let lineItemMatch = lineItems.find((ele) => {
-                            return ele.properties && ele.properties.name && ele.properties.name.value === priceObj.name
-                        })
-                        if (!lineItemMatch) {
-                            // if it doesn't exist, create a line item for the product
-                            const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
-
-                            // associate the line item with the deal
-                            await createAssociation(dealId, lineItemId)
-                        } else if (lineItemMatch) {
-                            // if it does exit, associate the line item with the deal
-                            await createAssociation(dealId, lineItemMatch.objectId)
-                        }
+                        const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                        await createAssociation(dealId, lineItemId)
                     } else {
                         const productId = await createProduct(priceObj)
-
                         const lineItemId = await createLineItem(priceObj.name, productId)
-
                         await createAssociation(dealId, lineItemId)
                     }
                 }
@@ -329,220 +256,146 @@ app.post('/create_subscription', async (req, res) => {
                     if (status === "trialing") {
                         return
                     } else {
-                        const updates = [
-                            { name: priceObj.productProperty, value: priceObj.product },
-                            { name: priceObj.priceProperty, value: priceObj.value },
-                            { name: "dealname", value: `${name} - ${priceObj.name}` },
-                            { name: "status", value: newStatus }
-                        ]
-                        await newUpdateDeal(match.id, updates)
-
-                        // get and delete deal's associated line items
+                        const body = {
+                            properties: {
+                                "dealname": `${name} - ${priceObj.name}`,
+                                "status": newStatus
+                            }
+                        }
+                        body.properties[priceObj.productProperty] = priceObj.product
+                        body.properties[priceObj.priceProperty] = priceObj.value
+                        await updateDeal(match.id, body)
                         const associations = await getAssociation(match.id)
                         await Promise.all(associations.map(async (association) => {
                             await deleteAssociation(match.id, association)
                         }))
-
-                        // get all hubspot products
-                        const hubspotProducts = await getHubspotProducts()
-                        // find the product to associate with the deal
+                        const hubspotProducts = await getHubspotProducts([])
                         const productMatch = hubspotProducts.find((item) => {
                             return item.properties.name && item.properties.name.value === priceObj.name
                         })
-
                         if (productMatch) {
-                            // get line items
-                            const lineItems = await getLineItems()
-
-                            // see if line item already exists to associate product to deal
-                            let lineItemMatch = lineItems.find((ele) => {
-                                return ele.properties.name && ele.properties.name.value === priceObj.name
-                            })
-                            if (!lineItemMatch) {
-                                // if it doesn't exist, create a line item for the product
-                                const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
-
-                                // associate the line item with the deal
-                                await createAssociation(match.id, lineItemId)
-                            } else if (lineItemMatch) {
-                                // if it does exit, associate the line item with the deal
-                                await createAssociation(match.id, lineItemMatch.objectId)
-                            }
+                            const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                            await createAssociation(match.id, lineItemId)
                         } else {
                             const productId = await createProduct(priceObj)
-
                             const lineItemId = await createLineItem(priceObj.name, productId)
-
                             await createAssociation(match.id, lineItemId)
                         }
                     }
                     return
                 } else {
                     const dealId = await createDeal(priceObj, name, status)
-                    // associate user to deal
                     await associateContactToDeal(dealId, userId)
-                    // get all hubspot products
-                    const hubspotProducts = await getHubspotProducts()
-                    // find the product to associate with the deal
+                    const hubspotProducts = await getHubspotProducts([])
                     const productMatch = hubspotProducts.find((item) => {
-                        return item.properties && item.properties.name && item.properties.name.value === priceObj.name
+                        return item.properties.name && item.properties.name.value === priceObj.name
                     })
-
                     if (productMatch) {
-                        // get line items
-                        const lineItems = await getLineItems()
-
-                        // see if line item already exists to associate product to deal
-                        let lineItemMatch = lineItems.find((ele) => {
-                            return ele.properties && ele.properties.name && ele.properties.name.value === priceObj.name
-                        })
-                        if (!lineItemMatch) {
-                            // if it doesn't exist, create a line item for the product
-                            const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
-
-                            // associate the line item with the deal
-                            await createAssociation(dealId, lineItemId)
-                        } else if (lineItemMatch) {
-                            // if it does exit, associate the line item with the deal
-                            await createAssociation(dealId, lineItemMatch.objectId)
-                        }
+                        const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                        await createAssociation(dealId, lineItemId)
                     } else {
                         const productId = await createProduct(priceObj)
-
                         const lineItemId = await createLineItem(priceObj.name, productId)
-
                         await createAssociation(dealId, lineItemId)
                     }
                 }
             }
         } else {
             const dealId = await createDeal(priceObj, name, status)
-            // associate user to deal
             await associateContactToDeal(dealId, userId)
-            // get all hubspot products
-            const hubspotProducts = await getHubspotProducts()
-            // find the product to associate with the deal
+            const hubspotProducts = await getHubspotProducts([])
             const productMatch = hubspotProducts.find((item) => {
                 return item.properties && item.properties.name && item.properties.name.value === priceObj.name
             })
-
             if (productMatch) {
-                // get line items
-                const lineItems = await getLineItems()
-
-                // see if line item already exists to associate product to deal
-                let lineItemMatch = lineItems.find((ele) => {
-                    return ele.properties && ele.properties.name && ele.properties.name.value === priceObj.name
-                })
-                if (!lineItemMatch) {
-                    // if it doesn't exist, create a line item for the product
-                    const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
-
-                    // associate the line item with the deal
-                    await createAssociation(dealId, lineItemId)
-                } else if (lineItemMatch) {
-                    // if it does exit, associate the line item with the deal
-                    await createAssociation(dealId, lineItemMatch.objectId)
-                }
+                const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                await createAssociation(dealId, lineItemId)
             } else {
                 const productId = await createProduct(priceObj)
-
                 const lineItemId = await createLineItem(priceObj.name, productId)
-
                 await createAssociation(dealId, lineItemId)
             }
         }
         res.status(200).send()
-
     } catch (e) {
         console.log("ERROR", e);
         res.status(400).send(e)
     }
-
-
 })
 
 app.post('/successful_payment', async (req, res) => {
     const payload = req.body.data.object
     const customerId = payload.customer
     const invoice = payload.invoice
-
-    console.log("Payload", payload);
-
     const customer = await stripe.customers.retrieve(customerId);
-
     const email = customer.email
     const name = customer.name || customer.metadata.name
-
     const invoiceData = await stripe.invoices.retrieve(invoice);
-
     const productPriceId = invoiceData.lines.data[0].price.id
     const priceObj = handlePrice(productPriceId)
-
     const userId = await getUserVID(email)
-
     let date = new Date()
     date = date.setUTCHours(0, 0, 0, 0)
-
     if (userId && invoiceData) {
         try {
             const deals = await getContactDeals(userId)
-
-            const dealsWithData = await Promise.all(deals.map(async (deal) => {
+            let dealsWithData = await Promise.all(deals.map(async (deal) => {
                 return await getDealData(deal)
             }))
+            dealsWithData = dealsWithData.filter((deal) => {
+                return deal.properties.pipeline && deal.properties.pipeline === '6808662'
+            })
             const match = dealsWithData.find((ele) => {
                 ele.properties && ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.product}`
             })
-
             if (match) {
-                updateDeal(match.id, "last_payment_date", date)
+                const body = {
+                    properties: {
+                        "last_payment_date": date
+                    }
+                }
+                updateDeal(match.id, body)
             }
-
         } catch (e) {
             console.log("ERROR: COULD NOT UPDATE DEAL");
         }
     }
-
     res.status(200).send()
 })
 
 app.post('/failed_payment', async (req, res) => {
     const payload = req.body.data.object
     const customerId = payload.customer
-
     const customer = await stripe.customers.retrieve(customerId);
-
     const email = customer.email
     const name = customer.name || customer.metadata.name
     const invoice = payload.invoice
-
     const invoiceData = await stripe.invoices.retrieve(invoice);
-
     const productPriceId = invoiceData.lines.data[0].price.id
     const priceObj = handlePrice(productPriceId)
-
     const userId = await getUserVID(email)
-
     let date = new Date()
     date = date.setUTCHours(0, 0, 0, 0)
-
     if (userId) {
         try {
             const deals = await getContactDeals(userId)
-
-            const dealsWithData = await Promise.all(deals.map(async (deal) => {
+            let dealsWithData = await Promise.all(deals.map(async (deal) => {
                 return await getDealData(deal)
             }))
-
+            dealsWithData = dealsWithData.filter((deal) => {
+                return deal.properties.pipeline && deal.properties.pipeline === '6808662'
+            })
             const match = dealsWithData.find((ele) => {
                 return ele.properties && ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.product}`
             })
-
             if (match) {
-                updateDeal(match.id, "hold_payment_date", date)
+                const body = {
+                    properties: {
+                        "hold_payment_date": date
+                    }
+                }
+                updateDeal(match.id, body)
             }
-
         } catch (e) {
             console.log("ERROR: COULD NOT UPDATE DEAL");
         }
@@ -552,17 +405,18 @@ app.post('/failed_payment', async (req, res) => {
 
 app.post('/expiring_card', async (req, res) => {
     const email = req.body.data.object.owner.email
-
     if (email) {
         try {
             const userId = await getUserVID(email)
-
             const deals = await getContactDeals(userId)
-
             deals.forEach(deal => {
-                updateDeal(deal, "status", "Expired")
+                const body = {
+                    properties: {
+                        "status": "Expired"
+                    }
+                }
+                updateDeal(deal, body)
             })
-
         } catch (e) {
             console.log("ERROR: COULD NOT UPDATE DEAL");
         }
@@ -574,6 +428,7 @@ app.post('/funnel_webhooks/test', async (req, res) => {
     // for the purpose of creating webhook - test for click funnels verification
     res.status(200).send()
 })
+
 app.post('/click_funnels', async (req, res) => {
     const purchase = req.body.purchase
     const firstName = purchase.contact.first_name

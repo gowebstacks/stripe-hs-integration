@@ -85,8 +85,12 @@ const getContactDeals = async (userId) => {
 }
 
 const getDealData = async (dealId) => {
-    const data = await axios.get(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}?hapikey=${process.env.HAPI_KEY}&properties=dfy_product_name&properties=referral_marketing_product&properties=authorify_product&properties=dealname`)
-    return data.data // returns object of deal with deal properties
+    try {
+        const data = await axios.get(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}?hapikey=${process.env.HAPI_KEY}&properties=dfy_product_name&properties=referral_marketing_product&properties=authorify_product&properties=dealname&properties=pipeline`)
+        return data.data // returns object of deal with deal properties
+    } catch (e) {
+        console.log(e);
+    }
 }
 
 const associateContactToDeal = async (dealId, contactId) => {
@@ -139,11 +143,20 @@ const createDeal = async (priceObj, name, status) => {
     }
 }
 
-const getHubspotProducts = async () => {
+const getHubspotProducts = async (prods, offset) => {
     try {
-        let hsProducts = await axios.get(`https://api.hubapi.com/crm-objects/v1/objects/products/paged?hapikey=${process.env.HAPI_KEY}&limit=500&properties=name`)
-
-        return hsProducts.data.objects
+        let url = `https://api.hubapi.com/crm/v3/objects/products?hapikey=${process.env.HAPI_KEY}&archived=false&limit=100&properties=name`
+        if (offset) {
+            url = `https://api.hubapi.com/crm/v3/objects/products?hapikey=${process.env.HAPI_KEY}&archived=false&limit=100&properties=name&after=${offset}`
+        }
+        const res = await axios.get(url)
+        res.data.results.forEach((prod) => prods.push(prod))
+        if (res.data.paging && res.data.paging.next && res.data.paging.next.after) {
+            console.log(res.data.paging.next.after);
+            return getHubspotProducts(prods, res.data.paging.next.after)
+        } else {
+            return prods
+        }
     } catch (e) {
         console.log("ERROR: COULD NOT GET PRODUCTS FROM HS");
     }
@@ -168,10 +181,20 @@ const createProduct = async (product) => {
     }
 }
 
-const getLineItems = async () => {
+const getLineItems = async (items, offset) => {
     try {
-        const lineItems = await axios.get(`https://api.hubapi.com/crm-objects/v1/objects/line_items/paged?hapikey=${process.env.HAPI_KEY}&limit=200&properties=name&properties=hs_product_id`)
-        return lineItems.data.objects
+        let url = `https://api.hubapi.com/crm/v3/objects/line_items?hapikey=${process.env.HAPI_KEY}&limit=100&archived=false&properties=name&properties=hs_product_id`
+        if (offset) {
+            url = `${url}&after=${offset}`
+        }
+        const res = await axios.get(url)
+        res.data.results.forEach((item) => items.push(item))
+        if (res.data.paging && res.data.paging.next && res.data.paging.next.after) {
+            console.log(res.data.paging.next.after);
+            return getLineItems(items, res.data.paging.next.after)
+        } else {
+            return items
+        }
     } catch (e) {
         console.log("ERROR, COULD NOT GET LINE ITEMS");
     }
@@ -221,8 +244,6 @@ const deleteAssociation = async (dealId, lineItemId) => {
             "definitionId": 19
         }
         const res = await axios.put(`https://api.hubapi.com/crm-associations/v1/associations/delete?hapikey=${process.env.HAPI_KEY}`, associationRequest)
-        // console.log(`SUCCESFULLY DELETED ASSOCIATION BETWEEN DEAL ${dealId} AND LINE ITEM ${lineItemId}`);
-
     } catch (e) {
         console.log("ERROR: COULD NOT DELETE ASSOCIATION");
     }
@@ -238,37 +259,13 @@ const getAssociation = async (dealId) => {
 }
 // deleteAssociation('3613802335', '1027475319')
 // getAssociation('3613802335')
-const updateDeal = async (dealId, property, value) => {
+const updateDeal = async (dealId, body) => {
     try {
-        const body = {
-            properties: {
-                // cancelled_date: Date.now()
-                [property]: value
-            }
-        }
         await axios.patch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}?hapikey=${process.env.HAPI_KEY}`, body, { accept: 'application/json', 'content-type': 'application/json' })
     } catch (e) {
         console.log("ERROR:", e);
     }
 }
-
-// const props = [{name: "Name", value: "Rob"}, {name: "Age", value: "28"}, {name: "Height", value: "6'2"}]
-const newUpdateDeal = async (dealId, properties) => {
-
-    try {
-        const body = {
-            properties: {
-            }
-        }
-        properties.forEach((property) => {
-            body.properties = { ...body.properties, [property.name]: property.value }
-        })
-        await axios.patch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}?hapikey=${process.env.HAPI_KEY}`, body, { accept: 'application/json', 'content-type': 'application/json' })
-    } catch (e) {
-        console.log("ERROR:", e);
-    }
-}
-// newUpdateDeal("22", props)
 
 const cancelDeal = async (dealId, date) => {
     try {
@@ -284,14 +281,4 @@ const cancelDeal = async (dealId, date) => {
     }
 }
 
-module.exports = { getUserVID, deleteAssociation, getAssociation, newUpdateDeal, createUser, getContactDeals, getDealData, createDeal, cancelDeal, getHubspotProducts, createProduct, getLineItems, createLineItem, createAssociation, updateDeal, associateContactToDeal, createUserOptIn, updateContact }
-
-
-// const decipher = () => {
-//     const str = 'Andy Mcc - Authorify Digital Membership $97'
-
-//     const prod = str.split(" - ")[1]
-//     console.log(prod);
-// }
-
-// decipher()
+module.exports = { getUserVID, deleteAssociation, handleStatus, getAssociation, createUser, getContactDeals, getDealData, createDeal, cancelDeal, getHubspotProducts, createProduct, getLineItems, createLineItem, createAssociation, updateDeal, associateContactToDeal, createUserOptIn, updateContact }
