@@ -109,6 +109,23 @@ app.post('/subscription_updated', async (req, res) => {
                     body.properties[priceObj.productProperty] = priceObj.product
                     body.properties[priceObj.priceProperty] = priceObj.value
                     updateDeal(match.id, body)
+
+                    const associations = await getAssociation(match.id)
+                    await Promise.all(associations.map(async (association) => {
+                        await deleteAssociation(match.id, association)
+                    }))
+                    const hubspotProducts = await getHubspotProducts([])
+                    const productMatch = hubspotProducts.find((item) => {
+                        return item.properties.name && item.properties.name === priceObj.name
+                    })
+                    if (productMatch) {
+                        const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                        await createAssociation(match.id, lineItemId)
+                    } else {
+                        const productId = await createProduct(priceObj)
+                        const lineItemId = await createLineItem(priceObj.name, productId)
+                        await createAssociation(match.id, lineItemId)
+                    }
                 }
             }
         }
