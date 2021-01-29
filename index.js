@@ -119,10 +119,12 @@ app.post('/subscription_updated', async (req, res) => {
                         return item.properties.name && item.properties.name === priceObj.name
                     })
                     if (productMatch) {
-                        const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                        console.log("PRODUCT MATCH", productMatch);
+                        const lineItemId = await createLineItem(priceObj.name, productMatch.id)
                         await createAssociation(match.id, lineItemId)
                     } else {
                         const productId = await createProduct(priceObj)
+                        console.log('CREATED PROD', productId);
                         const lineItemId = await createLineItem(priceObj.name, productId)
                         await createAssociation(match.id, lineItemId)
                     }
@@ -188,7 +190,7 @@ app.post('/create_subscription', async (req, res) => {
                             return item.properties.name && item.properties.name === priceObj.name
                         })
                         if (productMatch) {
-                            const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                            const lineItemId = await createLineItem(priceObj.name, productMatch.id)
                             await createAssociation(match.id, lineItemId)
                         } else {
                             console.log("NO PROD MATCH", priceObj.name);
@@ -206,7 +208,7 @@ app.post('/create_subscription', async (req, res) => {
                         return item.properties.name && item.properties.name === priceObj.name
                     })
                     if (productMatch) {
-                        const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                        const lineItemId = await createLineItem(priceObj.name, productMatch.id)
                         await createAssociation(dealId, lineItemId)
                     } else {
                         const productId = await createProduct(priceObj)
@@ -240,7 +242,7 @@ app.post('/create_subscription', async (req, res) => {
                             return item.properties.name && item.properties.name === priceObj.name
                         })
                         if (productMatch) {
-                            const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                            const lineItemId = await createLineItem(priceObj.name, productMatch.id)
                             await createAssociation(match.id, lineItemId)
                         } else {
                             const productId = await createProduct(priceObj)
@@ -257,7 +259,7 @@ app.post('/create_subscription', async (req, res) => {
                         return item.properties.name && item.properties.name === priceObj.name
                     })
                     if (productMatch) {
-                        const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                        const lineItemId = await createLineItem(priceObj.name, productMatch.id)
                         await createAssociation(dealId, lineItemId)
                     } else {
                         const productId = await createProduct(priceObj)
@@ -291,7 +293,7 @@ app.post('/create_subscription', async (req, res) => {
                             return item.properties.name && item.properties.name === priceObj.name
                         })
                         if (productMatch) {
-                            const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                            const lineItemId = await createLineItem(priceObj.name, productMatch.id)
                             await createAssociation(match.id, lineItemId)
                         } else {
                             const productId = await createProduct(priceObj)
@@ -308,7 +310,7 @@ app.post('/create_subscription', async (req, res) => {
                         return item.properties.name && item.properties.name === priceObj.name
                     })
                     if (productMatch) {
-                        const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                        const lineItemId = await createLineItem(priceObj.name, productMatch.id)
                         await createAssociation(dealId, lineItemId)
                     } else {
                         const productId = await createProduct(priceObj)
@@ -325,7 +327,7 @@ app.post('/create_subscription', async (req, res) => {
                 return item.properties && item.properties.name && item.properties.name === priceObj.name
             })
             if (productMatch) {
-                const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+                const lineItemId = await createLineItem(priceObj.name, productMatch.id)
                 await createAssociation(dealId, lineItemId)
             } else {
                 const productId = await createProduct(priceObj)
@@ -531,7 +533,7 @@ app.listen(PORT, () => {
 //                     return item.properties && item.properties.name && item.properties.name === priceObj.name
 //                 })
 //                 if (productMatch) {
-//                     const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+//                     const lineItemId = await createLineItem(priceObj.name, productMatch.id)
 //                     await createAssociation(dealId, lineItemId)
 //                 } else {
 //                     const productId = await createProduct(priceObj)
@@ -547,7 +549,7 @@ app.listen(PORT, () => {
 //                 return item.properties && item.properties.name && item.properties.name === priceObj.name
 //             })
 //             if (productMatch) {
-//                 const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+//                 const lineItemId = await createLineItem(priceObj.name, productMatch.id)
 //                 await createAssociation(dealId, lineItemId)
 //             } else {
 //                 const productId = await createProduct(priceObj)

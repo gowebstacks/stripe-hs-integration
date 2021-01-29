@@ -217,7 +217,7 @@ const createLineItem = async (name, prodId) => {
         const lineItemId = lineItem.data.id
         return lineItemId
     } catch (e) {
-        console.log("ERROR: COULD NOT CREATE LINE ITEM FOR PRODUCT");
+        console.log("ERROR: COULD NOT CREATE LINE ITEM FOR PRODUCT", e);
     }
 }
 
