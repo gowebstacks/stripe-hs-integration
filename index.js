@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 require('dotenv').config()
 const { handleProd, handlePrice } = require('./utils/products')
-const { getUserVID, deleteAssociation, getAssociation, createUser, getContactDeals, getDealData, createDeal, getHubspotProducts, createProduct, handleStatus, createLineItem, createAssociation, updateDeal, associateContactToDeal, cancelDeal, createUserOptIn, updateContact } = require('./utils/hubspot')
+const { getUserVID, deleteAssociation, getAssociation, createUser, getContactDeals, getDealData, createDeal, getHubspotProducts, createProduct, handleStatus, createLineItem, createAssociation, updateDeal, associateContactToDeal, createUserOptIn, updateContact } = require('./utils/hubspot')
 const app = express()
 app.use(bodyParser.json())
 
@@ -40,7 +40,13 @@ app.post('/cancel_subscription', async (req, res) => {
                 return ele.properties && ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.name}`
             })
             if (match) {
-                cancelDeal(match.id, date)
+                const body = {
+                    properties: {
+                        cancelled_date: date,
+                        status: "Cancelled"
+                    }
+                }
+                await updateDeal(match.id, body)
             } else {
                 console.log("NO ASSOCIATED DEAL FOUND");
             }
@@ -97,15 +103,8 @@ app.post('/subscription_updated', async (req, res) => {
                         }
                     }
                     if (prevStatus !== status) {
-                        if (status === "trialing") {
-                            body.properties['status'] = "Trialing"
-                        } else if (status === "active") {
-                            body.properties['status'] = "Active"
-                        } else if (status === "canceled") {
-                            body.properties['status'] = "Cancelled"
-                        } else if (status === "past_due" || status === "unpaid" || status === "incomplete") {
-                            body.properties['status'] = "Failed"
-                        }
+                        const newStatus = handleStatus(status)
+                        body.properties['status'] = newStatus
                     }
                     body.properties[priceObj.productProperty] = priceObj.product
                     body.properties[priceObj.priceProperty] = priceObj.value
@@ -169,12 +168,13 @@ app.post('/create_subscription', async (req, res) => {
                         }))
                         const hubspotProducts = await getHubspotProducts([])
                         const productMatch = hubspotProducts.find((item) => {
-                            return item.properties.name && item.properties.name.value === priceObj.name
+                            return item.properties.name && item.properties.name === priceObj.name
                         })
                         if (productMatch) {
                             const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
                             await createAssociation(match.id, lineItemId)
                         } else {
+                            console.log("NO PROD MATCH", priceObj.name);
                             const productId = await createProduct(priceObj)
                             const lineItemId = await createLineItem(priceObj.name, productId)
                             await createAssociation(match.id, lineItemId)
@@ -186,7 +186,7 @@ app.post('/create_subscription', async (req, res) => {
                     await associateContactToDeal(dealId, userId)
                     const hubspotProducts = await getHubspotProducts([])
                     const productMatch = hubspotProducts.find((item) => {
-                        return item.properties.name && item.properties.name.value === priceObj.name
+                        return item.properties.name && item.properties.name === priceObj.name
                     })
                     if (productMatch) {
                         const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
@@ -220,7 +220,7 @@ app.post('/create_subscription', async (req, res) => {
                         }))
                         const hubspotProducts = await getHubspotProducts([])
                         const productMatch = hubspotProducts.find((item) => {
-                            return item.properties.name && item.properties.name.value === priceObj.name
+                            return item.properties.name && item.properties.name === priceObj.name
                         })
                         if (productMatch) {
                             const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
@@ -237,7 +237,7 @@ app.post('/create_subscription', async (req, res) => {
                     await associateContactToDeal(dealId, userId)
                     const hubspotProducts = await getHubspotProducts([])
                     const productMatch = hubspotProducts.find((item) => {
-                        return item.properties.name && item.properties.name.value === priceObj.name
+                        return item.properties.name && item.properties.name === priceObj.name
                     })
                     if (productMatch) {
                         const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
@@ -271,7 +271,7 @@ app.post('/create_subscription', async (req, res) => {
                         }))
                         const hubspotProducts = await getHubspotProducts([])
                         const productMatch = hubspotProducts.find((item) => {
-                            return item.properties.name && item.properties.name.value === priceObj.name
+                            return item.properties.name && item.properties.name === priceObj.name
                         })
                         if (productMatch) {
                             const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
@@ -288,7 +288,7 @@ app.post('/create_subscription', async (req, res) => {
                     await associateContactToDeal(dealId, userId)
                     const hubspotProducts = await getHubspotProducts([])
                     const productMatch = hubspotProducts.find((item) => {
-                        return item.properties.name && item.properties.name.value === priceObj.name
+                        return item.properties.name && item.properties.name === priceObj.name
                     })
                     if (productMatch) {
                         const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
@@ -305,7 +305,7 @@ app.post('/create_subscription', async (req, res) => {
             await associateContactToDeal(dealId, userId)
             const hubspotProducts = await getHubspotProducts([])
             const productMatch = hubspotProducts.find((item) => {
-                return item.properties && item.properties.name && item.properties.name.value === priceObj.name
+                return item.properties && item.properties.name && item.properties.name === priceObj.name
             })
             if (productMatch) {
                 const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
@@ -456,3 +456,91 @@ app.post('/click_funnels', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 })
+
+
+// const createNewDeal = async (product, customerId, productPriceId, status) => {
+//     const priceObj = handlePrice(productPriceId)
+//     const prodInfo = handleProd(product)
+//     const customer = await stripe.customers.retrieve(customerId);
+//     const email = customer.email
+//     let name = customer.metadata.name || customer.name || customer.shipping.name
+//     let newStatus = handleStatus(status)
+//     let match = false
+
+//     try {
+//         let userId = await getUserVID(email)
+//         if (!userId) {
+//             userId = await createUser(email, name)
+//         }
+//         const deals = await getContactDeals(userId)
+//         if (deals && deals.length > 0) {
+//             let dealsWithData = await Promise.all(deals.map(async (deal) => {
+//                 return await getDealData(deal)
+//             }))
+//             dealsWithData = dealsWithData.filter((deal) => {
+//                 return deal.properties.pipeline && deal.properties.pipeline === '6808662'
+//             })
+//             if (prodInfo.prod === "Authorify") {
+//                 const setMatch = dealsWithData.find((ele) => {
+//                     return ele.properties.authorify_product && ele.properties.authorify_product !== null
+//                 })
+//                 if (setMatch) {
+//                     match = true
+//                 }
+//             } else if (prodInfo.prod === "RMA") {
+//                 const setMatch = dealsWithData.find((ele) => {
+//                     return ele.properties.referral_marketing_product && ele.properties.referral_marketing_product !== null
+//                 })
+//                 if (setMatch) {
+//                     match = true
+//                 }
+//             } else if (prodInfo.prod === "DFY") {
+//                 const setMatch = dealsWithData.find((ele) => {
+//                     return ele.properties && ele.properties.dfy_product_name && ele.properties.dfy_product_name !== null
+//                 })
+//                 if (setMatch) {
+//                     match = true
+//                 }
+//             }
+//             if (match) {
+//                 console.log("MATCH");
+
+//             } else {
+//                 console.log("NO MATCH");
+//                 const dealId = await createDeal(priceObj, name, status)
+//                 await associateContactToDeal(dealId, userId)
+//                 const hubspotProducts = await getHubspotProducts([])
+//                 const productMatch = hubspotProducts.find((item) => {
+//                     return item.properties && item.properties.name && item.properties.name === priceObj.name
+//                 })
+//                 if (productMatch) {
+//                     const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+//                     await createAssociation(dealId, lineItemId)
+//                 } else {
+//                     const productId = await createProduct(priceObj)
+//                     const lineItemId = await createLineItem(priceObj.name, productId)
+//                     await createAssociation(dealId, lineItemId)
+//                 }
+//             }
+//         } else {
+//             const dealId = await createDeal(priceObj, name, status)
+//             await associateContactToDeal(dealId, userId)
+//             const hubspotProducts = await getHubspotProducts([])
+//             const productMatch = hubspotProducts.find((item) => {
+//                 return item.properties && item.properties.name && item.properties.name === priceObj.name
+//             })
+//             if (productMatch) {
+//                 const lineItemId = await createLineItem(priceObj.name, productMatch.objectId)
+//                 await createAssociation(dealId, lineItemId)
+//             } else {
+//                 const productId = await createProduct(priceObj)
+//                 const lineItemId = await createLineItem(priceObj.name, productId)
+//                 await createAssociation(dealId, lineItemId)
+//             }
+//         }
+//     } catch (e) {
+//         console.log(e);
+//     }
+// }
+// createNewDeal('prod_IIH7dwjQeJjrPo', 'cus_IkLK2656Em1fcH', 'price_1HhgZKA4Qp1GGmkojD1SQL1R', 'active')
+// createNewDeal(product, customerId, productPriceId, status)

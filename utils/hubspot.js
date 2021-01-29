@@ -152,9 +152,10 @@ const getHubspotProducts = async (prods, offset) => {
         const res = await axios.get(url)
         res.data.results.forEach((prod) => prods.push(prod))
         if (res.data.paging && res.data.paging.next && res.data.paging.next.after) {
-            console.log(res.data.paging.next.after);
+            // console.log(res.data.paging.next.after);
             return getHubspotProducts(prods, res.data.paging.next.after)
         } else {
+            // console.log(prods);
             return prods
         }
     } catch (e) {
@@ -162,16 +163,18 @@ const getHubspotProducts = async (prods, offset) => {
     }
 }
 
+// getHubspotProducts([])
 const createProduct = async (product) => {
     try {
         if (product.product) {
             const productBody = {
                 properties: {
-                    name: product.product,
+                    name: product.name,
                     price: product.value
                 }
             }
             const newProduct = await axios.post(`https://api.hubapi.com/crm/v3/objects/products?hapikey=${process.env.HAPI_KEY}`, productBody, { accept: 'application/json', 'content-type': 'application/json' })
+            console.log("CREATED PROD", newProduct.data.id);
             return newProduct.data.id
         } else {
             return undefined
@@ -267,18 +270,5 @@ const updateDeal = async (dealId, body) => {
     }
 }
 
-const cancelDeal = async (dealId, date) => {
-    try {
-        const body = {
-            properties: {
-                cancelled_date: date,
-                status: "Cancelled"
-            }
-        }
-        await axios.patch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}?hapikey=${process.env.HAPI_KEY}`, body, { accept: 'application/json', 'content-type': 'application/json' })
-    } catch (e) {
-        console.log("ERROR: COULD NOT UPDATE DEAL", e);
-    }
-}
 
-module.exports = { getUserVID, deleteAssociation, handleStatus, getAssociation, createUser, getContactDeals, getDealData, createDeal, cancelDeal, getHubspotProducts, createProduct, getLineItems, createLineItem, createAssociation, updateDeal, associateContactToDeal, createUserOptIn, updateContact }
+module.exports = { getUserVID, deleteAssociation, handleStatus, getAssociation, createUser, getContactDeals, getDealData, createDeal, getHubspotProducts, createProduct, getLineItems, createLineItem, createAssociation, updateDeal, associateContactToDeal, createUserOptIn, updateContact }
