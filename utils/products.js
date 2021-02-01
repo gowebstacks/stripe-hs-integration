@@ -522,8 +522,6 @@ const handlePrice = (price) => {
 
 
 
-
-
 // DEV DATA
 // const handleProd = (productId) => {
 //     switch (productId) {
