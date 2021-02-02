@@ -17,7 +17,6 @@ const createUser = async (userEmail, name) => {
     const firstName = names.splice(0, 1)[0] || ""
     const lastName = names.join(' ') || ""
     try {
-
         const reqBody = {
             "properties": [{
                 "property": "email",
@@ -38,9 +37,7 @@ const createUser = async (userEmail, name) => {
 }
 
 const createUserOptIn = async (email, firstName, lastName, opt_in) => {
-
     try {
-
         const reqBody = {
             "properties": [{
                 "property": "email",
@@ -64,7 +61,6 @@ const createUserOptIn = async (email, firstName, lastName, opt_in) => {
 }
 
 const updateContact = async (userVID) => {
-
     try {
         const reqBody = {
             "properties": [{
@@ -77,7 +73,6 @@ const updateContact = async (userVID) => {
         console.log("COULD NOT UPDATE CONTACT", e);
     }
 }
-// updateContact(112385601, false)
 
 const getContactDeals = async (userId) => {
     const dealsData = await axios.get(`https://api.hubapi.com/crm-associations/v1/associations/${userId}/HUBSPOT_DEFINED/4?hapikey=${process.env.HAPI_KEY}`)
@@ -163,7 +158,6 @@ const getHubspotProducts = async (prods, offset) => {
     }
 }
 
-// getHubspotProducts([])
 const createProduct = async (product) => {
     try {
         if (product.product) {
@@ -237,6 +231,7 @@ const createAssociation = async (dealId, lineItemId) => {
         console.log("ERROR: COULD NOT CREATE ASSOCIATION");
     }
 }
+
 const deleteAssociation = async (dealId, lineItemId) => {
     //  DELETE HUBSPOT ASSOCIATION FROM LINE ITEM TO DEAL
     try {
@@ -260,8 +255,7 @@ const getAssociation = async (dealId) => {
         console.log("ERROR", e);
     }
 }
-// deleteAssociation('3613802335', '1027475319')
-// getAssociation('3613802335')
+
 const updateDeal = async (dealId, body) => {
     try {
         await axios.patch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}?hapikey=${process.env.HAPI_KEY}`, body, { accept: 'application/json', 'content-type': 'application/json' })

@@ -345,11 +345,9 @@ app.post('/create_subscription', async (req, res) => {
 app.post('/successful_payment', async (req, res) => {
     const payload = req.body.data.object
     const customerId = payload.customer
-    const invoice = payload.invoice
     const customer = await stripe.customers.retrieve(customerId);
     const email = customer.email
     const name = customer.name || customer.metadata.name
-    const invoiceData = await stripe.invoices.retrieve(invoice);
     const productPriceId = invoiceData.lines.data[0].price.id
     const priceObj = handlePrice(productPriceId)
     const userId = await getUserVID(email)
@@ -365,7 +363,7 @@ app.post('/successful_payment', async (req, res) => {
                 return deal.properties.pipeline && deal.properties.pipeline === '6808662'
             })
             const match = dealsWithData.find((ele) => {
-                ele.properties && ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.product}`
+                return ele.properties.dealname && (ele.properties.dealname === `${name} - ${priceObj.product}`) || (ele.properties.dealname === `${name} - ${priceObj.name}`)
             })
             if (match) {
                 const body = {
@@ -373,7 +371,7 @@ app.post('/successful_payment', async (req, res) => {
                         "last_payment_date": date
                     }
                 }
-                updateDeal(match.id, body)
+                await updateDeal(match.id, body)
             }
         } catch (e) {
             console.log("ERROR: COULD NOT UPDATE DEAL");
@@ -388,8 +386,6 @@ app.post('/failed_payment', async (req, res) => {
     const customer = await stripe.customers.retrieve(customerId);
     const email = customer.email
     const name = customer.name || customer.metadata.name
-    const invoice = payload.invoice
-    const invoiceData = await stripe.invoices.retrieve(invoice);
     const productPriceId = invoiceData.lines.data[0].price.id
     const priceObj = handlePrice(productPriceId)
     const userId = await getUserVID(email)
@@ -405,7 +401,7 @@ app.post('/failed_payment', async (req, res) => {
                 return deal.properties.pipeline && deal.properties.pipeline === '6808662'
             })
             const match = dealsWithData.find((ele) => {
-                return ele.properties && ele.properties.dealname && ele.properties.dealname === `${name} - ${priceObj.product}`
+                return ele.properties.dealname && (ele.properties.dealname === `${name} - ${priceObj.product}`) || (ele.properties.dealname === `${name} - ${priceObj.name}`)
             })
             if (match) {
                 const body = {
@@ -413,7 +409,7 @@ app.post('/failed_payment', async (req, res) => {
                         "hold_payment_date": date
                     }
                 }
-                updateDeal(match.id, body)
+                await updateDeal(match.id, body)
             }
         } catch (e) {
             console.log("ERROR: COULD NOT UPDATE DEAL");
@@ -428,14 +424,14 @@ app.post('/expiring_card', async (req, res) => {
         try {
             const userId = await getUserVID(email)
             const deals = await getContactDeals(userId)
-            deals.forEach(deal => {
+            for (const deal of deals) {
                 const body = {
                     properties: {
                         "status": "Expired"
                     }
                 }
-                updateDeal(deal, body)
-            })
+                await updateDeal(deal, body)
+            }
         } catch (e) {
             console.log("ERROR: COULD NOT UPDATE DEAL");
         }
