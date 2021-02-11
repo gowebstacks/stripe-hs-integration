@@ -416,7 +416,7 @@ app.post('/failed_payment', async (req, res) => {
         const userId = await getUserVID(email)
         let date = new Date()
         date = date.setUTCHours(0, 0, 0, 0)
-        
+
         if (userId && invoiceId) {
             const invoiceData = await stripe.invoices.retrieve(invoiceId);
             const productPriceId = invoiceData.lines.data[0].price.id
@@ -462,9 +462,9 @@ app.post('/failed_payment', async (req, res) => {
                     }
                 }, 5000)
             }
-        } catch (e) {
-            console.log("ERROR: COULD NOT UPDATE DEAL");
         }
+    } catch (e) {
+        console.log("ERROR: COULD NOT UPDATE DEAL");
     }
     res.status(200).send()
 })
