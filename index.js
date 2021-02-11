@@ -346,6 +346,9 @@ app.post('/successful_payment', async (req, res) => {
     const payload = req.body.data.object
     const customerId = payload.customer
     const customer = await stripe.customers.retrieve(customerId);
+    const invoiceId = payload.invoice
+    console.log("INVOICE ID", invoiceId);
+    const invoiceData = await stripe.invoices.retrieve(invoiceId);
     const email = customer.email
     const name = customer.name || customer.metadata.name
     const productPriceId = invoiceData.lines.data[0].price.id
@@ -355,14 +358,14 @@ app.post('/successful_payment', async (req, res) => {
     date = date.setUTCHours(0, 0, 0, 0)
     if (userId && invoiceData) {
         try {
-            const deals = await getContactDeals(userId)
+            let deals = await getContactDeals(userId)
             let dealsWithData = await Promise.all(deals.map(async (deal) => {
                 return await getDealData(deal)
             }))
             dealsWithData = dealsWithData.filter((deal) => {
                 return deal.properties.pipeline && deal.properties.pipeline === '6808662'
             })
-            const match = dealsWithData.find((ele) => {
+            let match = dealsWithData.find((ele) => {
                 return ele.properties.dealname && (ele.properties.dealname === `${name} - ${priceObj.product}`) || (ele.properties.dealname === `${name} - ${priceObj.name}`)
             })
             if (match) {
@@ -372,6 +375,27 @@ app.post('/successful_payment', async (req, res) => {
                     }
                 }
                 await updateDeal(match.id, body)
+            } else {
+                setTimeout(async () => {
+                    deals = await getContactDeals(userId)
+                    dealsWithData = await Promise.all(deals.map(async (deal) => {
+                        return await getDealData(deal)
+                    }))
+                    dealsWithData = dealsWithData.filter((deal) => {
+                        return deal.properties.pipeline && deal.properties.pipeline === '6808662'
+                    })
+                    match = dealsWithData.find((ele) => {
+                        return ele.properties.dealname && (ele.properties.dealname === `${name} - ${priceObj.product}`) || (ele.properties.dealname === `${name} - ${priceObj.name}`)
+                    })
+                    if (match) {
+                        const body = {
+                            properties: {
+                                "last_payment_date": date
+                            }
+                        }
+                        await updateDeal(match.id, body)
+                    }
+                }, 5000)
             }
         } catch (e) {
             console.log("ERROR: COULD NOT UPDATE DEAL");
@@ -384,6 +408,9 @@ app.post('/failed_payment', async (req, res) => {
     const payload = req.body.data.object
     const customerId = payload.customer
     const customer = await stripe.customers.retrieve(customerId);
+    const invoiceId = payload.invoice
+    console.log("INVOICE ID", invoiceId);
+    const invoiceData = await stripe.invoices.retrieve(invoiceId);
     const email = customer.email
     const name = customer.name || customer.metadata.name
     const productPriceId = invoiceData.lines.data[0].price.id
@@ -393,14 +420,14 @@ app.post('/failed_payment', async (req, res) => {
     date = date.setUTCHours(0, 0, 0, 0)
     if (userId) {
         try {
-            const deals = await getContactDeals(userId)
+            let deals = await getContactDeals(userId)
             let dealsWithData = await Promise.all(deals.map(async (deal) => {
                 return await getDealData(deal)
             }))
             dealsWithData = dealsWithData.filter((deal) => {
                 return deal.properties.pipeline && deal.properties.pipeline === '6808662'
             })
-            const match = dealsWithData.find((ele) => {
+            let match = dealsWithData.find((ele) => {
                 return ele.properties.dealname && (ele.properties.dealname === `${name} - ${priceObj.product}`) || (ele.properties.dealname === `${name} - ${priceObj.name}`)
             })
             if (match) {
@@ -410,6 +437,29 @@ app.post('/failed_payment', async (req, res) => {
                     }
                 }
                 await updateDeal(match.id, body)
+
+            } else {
+                setTimeout(async () => {
+                    deals = await getContactDeals(userId)
+                    dealsWithData = await Promise.all(deals.map(async (deal) => {
+                        return await getDealData(deal)
+                    }))
+                    dealsWithData = dealsWithData.filter((deal) => {
+                        return deal.properties.pipeline && deal.properties.pipeline === '6808662'
+                    })
+                    match = dealsWithData.find((ele) => {
+                        return ele.properties.dealname && (ele.properties.dealname === `${name} - ${priceObj.product}`) || (ele.properties.dealname === `${name} - ${priceObj.name}`)
+                    })
+                    if (match) {
+                        const body = {
+                            properties: {
+                                "hold_payment_date": date
+                            }
+                        }
+                        await updateDeal(match.id, body)
+
+                    }
+                }, 5000)
             }
         } catch (e) {
             console.log("ERROR: COULD NOT UPDATE DEAL");

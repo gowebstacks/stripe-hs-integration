@@ -259,6 +259,7 @@ const getAssociation = async (dealId) => {
 const updateDeal = async (dealId, body) => {
     try {
         await axios.patch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}?hapikey=${process.env.HAPI_KEY}`, body, { accept: 'application/json', 'content-type': 'application/json' })
+        console.log('SUCCESSFULLY UPDATED DEAL LAST PAYMENT DATE', dealId);
     } catch (e) {
         console.log("ERROR:", e);
     }
