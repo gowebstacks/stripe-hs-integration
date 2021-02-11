@@ -348,15 +348,15 @@ app.post('/successful_payment', async (req, res) => {
     const customer = await stripe.customers.retrieve(customerId);
     const invoiceId = payload.invoice
     console.log("INVOICE ID", invoiceId);
-    const invoiceData = await stripe.invoices.retrieve(invoiceId);
     const email = customer.email
     const name = customer.name || customer.metadata.name
-    const productPriceId = invoiceData.lines.data[0].price.id
-    const priceObj = handlePrice(productPriceId)
     const userId = await getUserVID(email)
     let date = new Date()
     date = date.setUTCHours(0, 0, 0, 0)
-    if (userId && invoiceData) {
+    if (userId && invoiceId) {
+        const invoiceData = await stripe.invoices.retrieve(invoiceId);
+        const productPriceId = invoiceData.lines.data[0].price.id
+        const priceObj = handlePrice(productPriceId)
         try {
             let deals = await getContactDeals(userId)
             let dealsWithData = await Promise.all(deals.map(async (deal) => {
@@ -406,20 +406,21 @@ app.post('/successful_payment', async (req, res) => {
 
 app.post('/failed_payment', async (req, res) => {
     const payload = req.body.data.object
-    const customerId = payload.customer
-    const customer = await stripe.customers.retrieve(customerId);
-    const invoiceId = payload.invoice
-    console.log("INVOICE ID", invoiceId);
-    const invoiceData = await stripe.invoices.retrieve(invoiceId);
-    const email = customer.email
-    const name = customer.name || customer.metadata.name
-    const productPriceId = invoiceData.lines.data[0].price.id
-    const priceObj = handlePrice(productPriceId)
-    const userId = await getUserVID(email)
-    let date = new Date()
-    date = date.setUTCHours(0, 0, 0, 0)
-    if (userId) {
-        try {
+    try {
+        const customerId = payload.customer
+        const customer = await stripe.customers.retrieve(customerId);
+        const invoiceId = payload.invoice
+        console.log("INVOICE ID", invoiceId);
+        const email = customer.email
+        const name = customer.name || customer.metadata.name
+        const userId = await getUserVID(email)
+        let date = new Date()
+        date = date.setUTCHours(0, 0, 0, 0)
+        
+        if (userId && invoiceId) {
+            const invoiceData = await stripe.invoices.retrieve(invoiceId);
+            const productPriceId = invoiceData.lines.data[0].price.id
+            const priceObj = handlePrice(productPriceId)
             let deals = await getContactDeals(userId)
             let dealsWithData = await Promise.all(deals.map(async (deal) => {
                 return await getDealData(deal)
