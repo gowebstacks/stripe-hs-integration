@@ -9,8 +9,8 @@ app.use(bodyParser.json())
 
 const PORT = process.env.PORT || 3000
 
-const stripe = require('stripe')(process.env.STRIPE_PROD_SK);  // FOR PROD
-// const stripe = require('stripe')(process.env.STRIPE_TEST_SK); // FOR DEV
+// const stripe = require('stripe')(process.env.STRIPE_PROD_SK);  // FOR PROD
+const stripe = require('stripe')(process.env.STRIPE_TEST_SK); // FOR DEV
 
 app.get("/", (req, res) => {
     res.send(JSON.stringify({ "Hello": "World" }))
@@ -67,7 +67,7 @@ app.post('/subscription_updated', async (req, res) => {
         const priceObj = handlePrice(productPriceId)
         const product = payload.items.data[0].price.product || payload.plan.product
         const prodInfo = handleProd(product)
-
+        const newStatus = handleStatus(status)
         const customer = await stripe.customers.retrieve(customerId);
         const email = customer.email
         const name = customer.name || customer.metadata.name
@@ -99,13 +99,16 @@ app.post('/subscription_updated', async (req, res) => {
                 if (match) {
                     const body = {
                         properties: {
-                            'dealname': `${name} - ${priceObj.name}`
+                            'dealname': `${name} - ${priceObj.name}`,
+                            amount: priceObj.value,
+                            "status": newStatus
+
                         }
                     }
-                    if (prevStatus !== status) {
-                        const newStatus = handleStatus(status)
-                        body.properties['status'] = newStatus
-                    }
+                    // if (prevStatus !== status) {
+                    // const newStatus = handleStatus(status)
+                    // body.properties['status'] = newStatus
+                    // }
                     body.properties[priceObj.productProperty] = priceObj.product
                     body.properties[priceObj.priceProperty] = priceObj.value
                     updateDeal(match.id, body)
@@ -180,6 +183,7 @@ app.post('/create_subscription', async (req, res) => {
                         }
                         body.properties[priceObj.productProperty] = priceObj.product
                         body.properties[priceObj.priceProperty] = priceObj.value
+                        body.properties.amount = priceObj.value
                         await updateDeal(match.id, body)
                         const associations = await getAssociation(match.id)
                         await Promise.all(associations.map(async (association) => {
@@ -193,7 +197,6 @@ app.post('/create_subscription', async (req, res) => {
                             const lineItemId = await createLineItem(priceObj.name, productMatch.id)
                             await createAssociation(match.id, lineItemId)
                         } else {
-                            console.log("NO PROD MATCH", priceObj.name);
                             const productId = await createProduct(priceObj)
                             const lineItemId = await createLineItem(priceObj.name, productId)
                             await createAssociation(match.id, lineItemId)
@@ -371,6 +374,7 @@ app.post('/successful_payment', async (req, res) => {
             if (match) {
                 const body = {
                     properties: {
+                        "status": "Active",
                         "last_payment_date": date
                     }
                 }
@@ -390,6 +394,7 @@ app.post('/successful_payment', async (req, res) => {
                     if (match) {
                         const body = {
                             properties: {
+                                "status": "Active",
                                 "last_payment_date": date
                             }
                         }

@@ -111,7 +111,7 @@ const handleStatus = (status) => {
         return "Active"
     } else if (status === "canceled") {
         return "Cancelled"
-    } else if (status === "past_due" || status === "unpaid" || status === "incomplete") {
+    } else if (status === "past_due" || status === "unpaid" || status === "incomplete_expired" || status === "incomplete" || status === "expired" || status === "unpaid") {
         return "Failed"
     } else {
         return "Active"
@@ -128,7 +128,8 @@ const createDeal = async (priceObj, name, status) => {
                 dealname: `${name} - ${priceObj.name}`,
                 pipeline: '6808662',
                 dealstage: '6808663',
-                status: newStatus
+                status: newStatus,
+                amount: priceObj.value
             }
         }
         const deal = await axios.post(`https://api.hubapi.com/crm/v3/objects/deals?hapikey=${process.env.HAPI_KEY}`, reqBody, { accept: 'application/json', 'content-type': 'application/json' })
